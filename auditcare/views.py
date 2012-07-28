@@ -26,7 +26,6 @@ LOCKOUT_URL = getattr(settings, 'AXES_LOCKOUT_URL', None)
 VERBOSE = getattr(settings, 'AXES_VERBOSE', True)
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser)
 def auditAll(request, template="auditcare/index.html"):
     auditEvents = AccessAudit.view("auditcare/by_date_access_events", descending=True, include_docs=True).all()
     realEvents = [{'user': a.user, 
