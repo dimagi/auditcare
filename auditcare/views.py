@@ -52,8 +52,6 @@ def export_all(request):
 
 from django.contrib.auth import views as auth_views
 
-@csrf_protect
-@never_cache
 def audited_login(request, *args, **kwargs):
     func = auth_views.login
     kwargs['template_name'] = settings.LOGIN_TEMPLATE
