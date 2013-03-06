@@ -376,6 +376,7 @@ class AccessAudit(AuditEvent):
 
     failures_since_start = IntegerProperty()
 
+    extra = DictProperty()
 
     class Meta:
         app_label = 'auditcare'
@@ -383,7 +384,20 @@ class AccessAudit(AuditEvent):
     @property
     def summary(self):
         return "%s from %s" % (self.access_type, self.ip_address)
-
+    
+    @classmethod
+    def _get_field_vals(self, user):
+        def _extract_fields(thing):
+            field_vals = {}
+            for field in thing._meta.get_all_field_names():
+                val = unicode(getattr(thing, field, None))
+                field_vals[field] = val
+            return field_vals
+        field_vals = _extract_fields(user)
+        prof = user.get_profile()
+        if prof:
+            field_vals.update(_extract_fields(prof))
+        return field_vals
 
     @classmethod
     def audit_login(cls, request, user, *args, **kwargs):
@@ -400,6 +414,7 @@ class AccessAudit(AuditEvent):
         audit.session_key = request.session.session_key
         audit.get_data = [] #[query2str(request.GET.items())]
         audit.post_data = []
+        audit.extra = AccessAudit._get_field_vals(user)
         audit.save()
 
     @classmethod
@@ -414,6 +429,7 @@ class AccessAudit(AuditEvent):
         else:
             audit.description = "Login Failure"
         audit.session_key = request.session.session_key
+        audit.extra = AccessAudit._get_field_vals(user)
         audit.save()
 
     @classmethod
@@ -430,6 +446,7 @@ class AccessAudit(AuditEvent):
             audit.description = "Logout %s" % (user.username)
         audit.access_type = 'logout'
         audit.session_key = request.session.session_key
+        audit.extra = AccessAudit._get_field_vals(user)
         audit.save()
 
 
