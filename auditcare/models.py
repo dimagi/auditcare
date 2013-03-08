@@ -393,6 +393,8 @@ class AccessAudit(AuditEvent):
                 val = unicode(getattr(thing, field, None))
                 field_vals[field] = val
             return field_vals
+        if not user:
+            return None
         field_vals = _extract_fields(user)
         prof = user.get_profile()
         if prof:
