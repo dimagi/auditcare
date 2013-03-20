@@ -24,6 +24,12 @@ class ThreadLocals(object):
 
 
 
+def ms_from_timedelta(td):
+    """
+    Given a timedelta object, returns a float representing milliseconds
+    """
+    return (td.seconds * 1000) + (td.microseconds / 1000.0)
+
 # this is not intended to be an all-knowing IP address regex
 IP_RE = re.compile('\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
 
