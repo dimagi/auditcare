@@ -1,15 +1,18 @@
 from __future__ import absolute_import
+from datetime import datetime
+import logging
+import traceback
+
 from django.conf import settings
 from django.contrib import admin
-from django.contrib.auth import views as auth_views
-import logging
+
 from auditcare.models import AuditEvent
 from auditcare.decorators import watch_login
 from auditcare.decorators import watch_logout
-import traceback
+from auditcare.utils import ms_from_timedelta
 
 
-
+DO_AUDIT_ALL_VIEWS = getattr(settings, 'AUDIT_ALL_VIEWS', True)
 
 class AuditMiddleware(object):
     def __init__(self):
@@ -22,9 +25,9 @@ class AuditMiddleware(object):
         if hasattr(settings, "AUDIT_ADMIN_VIEWS"):
             self.log_admin=settings.AUDIT_ADMIN_VIEWS
         else:
-            logging.info("You do not have AUDIT_ADMIN_VIEWS settings variable setup, by default logging all admin view access")
+            logging.debug("You do not have AUDIT_ADMIN_VIEWS settings variable setup, by default logging all admin view access")
 
-        if not getattr(settings, 'AUDIT_ALL_VIEWS', False):
+        if not DO_AUDIT_ALL_VIEWS:
             if not hasattr(settings, "AUDIT_VIEWS"):
                 logging.warning("You do not have the AUDIT_VIEWS settings variable setup.  If you want to setup central view call audit events, please add the property and populate it with fully qualified view names.")
                 self.active=False
@@ -58,10 +61,9 @@ class AuditMiddleware(object):
         else:
             logging.debug("Middleware is running in a test context, disabling monkeypatch")
 
-
     @staticmethod
     def do_process_view(request, view_func, view_args, view_kwargs, extra={}):
-        if getattr(settings, 'AUDIT_ALL_VIEWS', False) or getattr(settings, "AUDIT_VIEWS", False):
+        if DO_AUDIT_ALL_VIEWS or getattr(settings, "AUDIT_VIEWS", False):
             if hasattr(view_func, 'func_name'): #is this just a plain jane __builtin__.function
                 fqview = "%s.%s" % (view_func.__module__, view_func.func_name)
             else:
@@ -75,7 +77,7 @@ class AuditMiddleware(object):
                 audit_doc = AuditEvent.audit_view(request, request.user, view_func, view_kwargs)
             else:
                 user = request.user
-                if settings.AUDIT_VIEWS.__contains__(fqview) or getattr(settings, 'AUDIT_ALL_VIEWS', False):
+                if settings.AUDIT_VIEWS.__contains__(fqview) or DO_AUDIT_ALL_VIEWS:
                     audit_doc = AuditEvent.audit_view(request, request.user, view_func, view_kwargs, extra=extra)
             if audit_doc:
                 setattr(request, 'audit_doc', audit_doc)
@@ -96,7 +98,10 @@ class AuditMiddleware(object):
         """
         audit_doc = getattr(request, 'audit_doc', None)
         if audit_doc:
+            tdelta_ms = ms_from_timedelta(datetime.utcnow() - audit_doc.event_date)
             audit_doc.status_code = response.status_code
+            audit_doc.response_time = tdelta_ms
             audit_doc.save()
+            #save audit doc just once at the end of the response
         return response
 

@@ -1,7 +1,8 @@
 import copy
+import simplejson
 import settings
 from couchdbkit.ext.django.schema import Document
-from couchdbkit.schema.properties import StringProperty, DateTimeProperty, StringListProperty, DictProperty, IntegerProperty
+from couchdbkit.schema.properties import StringProperty, DateTimeProperty, StringListProperty, DictProperty, IntegerProperty, FloatProperty
 from django.db import models
 import uuid
 from django.contrib.auth.models import User, AnonymousUser
@@ -233,7 +234,6 @@ class ModelActionAudit(AuditEvent):
         """
 
         """
-
         db = AuditEvent.get_db()
         prior_revs = db.view('auditcare/model_actions_by_id', key=[model_class_name, instance_id], reduce=False).all()
 
@@ -298,17 +298,17 @@ class NavigationEventAudit(AuditEvent):
     Audit event to track happenings within the system, ie, view access
     """
     request_path = StringProperty()
+    request_params = StringProperty()
     ip_address = StringProperty()
     user_agent = StringProperty()
 
     view = StringProperty() #the fully qualifid view name
     view_kwargs = DictProperty()
-    headers = DictProperty() #the request.META?
+    headers = DictProperty() #to deprecate, too verbose
     session_key = StringProperty() #in the future possibly save some disk space by storing user agent and IP stuff in a separte session document?
-
     status_code = IntegerProperty()
-
     extra = DictProperty()
+    response_time = FloatProperty()
 
     @property
     def summary(self):
@@ -319,28 +319,26 @@ class NavigationEventAudit(AuditEvent):
 
 
     @classmethod
-    def audit_view(cls, request, user, view_func, view_kwargs, extra={}):
-        """Creates an instance of a Access log."""
+    def audit_view(cls, request, user, view_func, view_kwargs, extra={}, do_save=False):
+        """Creates an instance of a View Access log. By default do not save so as to process the response time
+        at the very end upon repsonse."""
         try:
             audit = cls.create_audit(cls, user)
-            audit.description += "View"
+            audit.description += " View"
+            audit.request_path = request.path
             if len(request.GET.keys()) > 0:
-                audit.request_path = "%s?%s" % (
-                    request.path, '&'.join(["%s=%s" % (x, request.GET[x]) for x in request.GET.keys()]))
+                audit.request_params = '&'.join(["%s=%s" % (x, request.GET[x]) for x in request.GET.keys()])
             else:
-                audit.request_path = request.path
+                audit.request_params = ""
             audit.ip_address = utils.get_ip(request)
             audit.user_agent = request.META.get('HTTP_USER_AGENT', '<unknown>')
             audit.view = "%s.%s" % (view_func.__module__, view_func.func_name)
-            for k in STANDARD_HEADER_KEYS:
-                header_item = request.META.get(k, None)
-                if header_item is not None:
-                    audit.headers[k] = header_item
-            #audit.headers = request.META #it's a bit verbose to go to that extreme, TODO: need to have targeted fields in the META, but due to server differences, it's hard to make it universal.
+
             audit.session_key = request.session.session_key
             audit.extra = extra
             audit.view_kwargs = view_kwargs
-            audit.save()
+            if do_save:
+                audit.save()
             return audit
         except Exception, ex:
             logging.error("NavigationEventAudit.audit_view error: %s" % ex)
@@ -373,6 +371,7 @@ class AccessAudit(AuditEvent):
     post_data = StringListProperty()
     http_accept = StringProperty()
     path_info = StringProperty()
+    headers = DictProperty()
 
     failures_since_start = IntegerProperty()
 
@@ -400,6 +399,12 @@ class AccessAudit(AuditEvent):
         audit.session_key = request.session.session_key
         audit.get_data = [] #[query2str(request.GET.items())]
         audit.post_data = []
+
+        for k in STANDARD_HEADER_KEYS:
+            header_item = request.META.get(k, None)
+            if header_item is not None:
+                audit.headers[k] = header_item
+
         audit.save()
 
     @classmethod
