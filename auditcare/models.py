@@ -1,4 +1,5 @@
 import copy
+import os
 import simplejson
 import settings
 from couchdbkit.ext.django.schema import Document
@@ -48,6 +49,7 @@ class AuditEvent(Document):
     #doc_type = StringProperty() #Descriptor classifying this particular instance - this will be the child class's class name, with some modifications if need be
     event_date = DateTimeProperty(default=getdate)
     description = StringProperty() #particular instance details of this audit event
+    host = StringProperty()
 
     @property
     def summary(self):
@@ -83,7 +85,13 @@ class AuditEvent(Document):
         else:
             audit.user = user.username
             audit.description = ''
+
+        os_name = "unknown_os"
+        if hasattr(os, "uname"):
+            os_name = os.uname()[1]
+        audit.host = os_name
         return audit
+
 
 
 class ModelActionAudit(AuditEvent):

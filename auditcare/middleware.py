@@ -13,6 +13,7 @@ from auditcare.utils import ms_from_timedelta
 
 
 DO_AUDIT_ALL_VIEWS = getattr(settings, 'AUDIT_ALL_VIEWS', True)
+AUDIT_EXCLUDE_VIEW_LIST = getattr(settings,'AUDIT_EXCLUDE_VIEWS', [])
 
 class AuditMiddleware(object):
     def __init__(self):
