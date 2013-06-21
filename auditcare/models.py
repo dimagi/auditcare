@@ -396,7 +396,12 @@ class AccessAudit(AuditEvent):
         if not user:
             return None
         field_vals = _extract_fields(user)
-        prof = user.get_profile()
+        prof = None
+        try:
+            prof = user.get_profile()
+        except:
+            # if profile does not exist, no matter
+            pass
         if prof:
             field_vals.update(_extract_fields(prof))
         return field_vals
